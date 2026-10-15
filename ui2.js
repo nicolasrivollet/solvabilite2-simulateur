@@ -15,12 +15,21 @@ A.tabs.prov = {
     });
     h += '<tr class="tot"><td>Facteur de développement</td>' + tri[0].map((_, k) => `<td class="n" id="cf-${k}">${k < n - 1 ? '' : ''}</td>`).join('') + '<td></td><td class="n" id="rs-tot"></td></tr>';
     $('#tab-prov').innerHTML = `
-      <div class="card"><h2>Triangle des paiements cumulés et Chain Ladder</h2><div class="scroll"><table>${h}</table></div>
-        <p class="note">Saisissez les paiements cumulés observés (M€). Les cellules grisées sont projetées par Chain Ladder (facteurs pondérés par les volumes), puis une queue est ajoutée.</p></div>
+      <div class="card"><h2>Triangle des paiements cumulés et Chain Ladder</h2>
+        <div class="bar" style="margin-bottom:10px"><span class="note" id="tri-state" style="margin:0"></span><button class="btn" id="tri-regen">Régénérer depuis les primes et le ratio S/P</button></div>
+        <div class="scroll"><table>${h}</table></div>
+        <p class="note">Le triangle est généré à partir des primes, du ratio sinistres / primes et du facteur de queue : l'ultime de l'année N vaut primes × ratio S/P. Vous pouvez aussi saisir les paiements cumulés observés (M€), ce qui désactive la régénération automatique. Les cellules grisées sont projetées par Chain Ladder (facteurs pondérés par les volumes), puis une queue est ajoutée.</p></div>
       <div id="prov-out" class="grid"></div>`;
+    $('#tri-regen').onclick = () => { A.P.nl.triAuto = true; A.P.nl.tri = M.buildTriangle(A.P.nl); A.refresh(); };
   },
   update(r) {
     const tri = A.P.nl.tri, n = tri.length;
+    document.querySelectorAll('[data-tri]').forEach(el => {
+      if (document.activeElement === el) return;
+      const [i, k] = el.dataset.tri.split(',').map(Number);
+      el.value = tri[i][k];
+    });
+    $('#tri-state').textContent = A.P.nl.triAuto ? 'Triangle lié aux primes (' + fmt(A.P.nl.prem) + ' M€) et au ratio S/P (' + pc(A.P.nl.lr, 1) + ').' : 'Triangle saisi à la main : il ne suit plus les primes ni le ratio S/P.';
     tri.forEach((row, i) => {
       for (let k = row.length; k < n; k++) { const e = $(`#pc-${i}-${k}`); if (e) e.textContent = fmt(r.cl.proj[i][k], 1); }
       $(`#ul-${i}`).textContent = fmt(r.cl.ult[i], 1); $(`#rs-${i}`).textContent = fmt(r.cl.reserve[i], 1);
@@ -192,7 +201,11 @@ function load() {
   try {
     const raw = localStorage.getItem(KEY); if (!raw) return;
     const s = JSON.parse(raw);
-    if (s && s.P && s.P.nl && s.P.vie && s.P.corr && s.P.cap && s.P.alloc) { A.P = s.P; if (s.SC) A.SC = s.SC; if (ORDER.includes(s.tab)) A.active = s.tab; }
+    if (s && s.P && s.P.nl && s.P.vie && s.P.corr && s.P.cap && s.P.alloc) {
+      A.P = s.P; if (s.SC) A.SC = s.SC; if (ORDER.includes(s.tab)) A.active = s.tab;
+      /* Sauvegarde d'une version antérieure : le triangle n'était pas lié aux primes, on le régénère. */
+      if (A.P.nl.triAuto === undefined) { A.P.nl.triAuto = true; A.P.nl.tri = M.buildTriangle(A.P.nl); }
+    }
   } catch (e) {}
 }
 A.refresh = () => {
@@ -216,8 +229,12 @@ document.addEventListener('input', e => {
   const v = parseFloat(el.value);
   if (isNaN(v)) return;
   const d = el.dataset;
-  if (d.p) A.set(A.P, d.p, v / (parseFloat(d.s) || 1));
-  else if (d.tri) { const [i, k] = d.tri.split(',').map(Number); A.P.nl.tri[i][k] = v; }
+  if (d.p) {
+    A.set(A.P, d.p, v / (parseFloat(d.s) || 1));
+    /* Le triangle suit les primes, le ratio S/P et la queue tant qu'il n'a pas été saisi à la main. */
+    if (A.P.nl.triAuto && ['nl.prem', 'nl.lr', 'nl.tail'].includes(d.p)) A.P.nl.tri = M.buildTriangle(A.P.nl);
+  }
+  else if (d.tri) { const [i, k] = d.tri.split(',').map(Number); A.P.nl.tri[i][k] = v; A.P.nl.triAuto = false; }
   else if (d.corr) { const [key, i, j] = d.corr.split(','); const m = A.P.corr[key]; m[+i][+j] = m[+j][+i] = Math.max(-1, Math.min(1, v)); const mirror = document.querySelector(`[data-corr="${key},${j},${i}"]`); if (mirror && mirror !== el) mirror.value = v; }
   else if (d.scen) A.SC[d.scen] = v;
   else return;

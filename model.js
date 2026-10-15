@@ -49,19 +49,25 @@ function interp(tab, t) {
   return tab[tab.length - 1][1];
 }
 
-/* Triangle de paiements cumulés de démonstration : 8 années de survenance (lignes),
-   8 années de développement (colonnes). La ligne i a (8 - i) cellules observées,
-   car les années récentes sont moins développées.
-   Construction : coût ultime de l'année i = 215 M€ × 1,04^i (inflation de 4 % par an),
-   avec une petite oscillation ; chaque cellule = ultime × part déjà réglée à l'âge k
-   (pat : 40 % au bout d'un an, jusqu'à 100 % au bout de huit ans).
-   ATTENTION : ce triangle est fabriqué à part. Il ne dépend ni des primes
-   (nl.prem) ni du ratio sinistres / primes (nl.lr) saisis. */
-function defaultTriangle() {
+/* Triangle de paiements cumulés construit à partir des hypothèses non-vie N :
+   8 années de survenance (lignes), 8 années de développement (colonnes). La ligne i
+   a (8 - i) cellules observées, car les années récentes sont moins développées.
+   Construction :
+     - l'année la plus récente (i = 7) a un coût ultime égal à primes × ratio sinistres/primes
+       (N.prem × N.lr), ramené avant queue en divisant par le facteur de queue N.tail ;
+     - chaque année plus ancienne est plus petite, selon une croissance historique fixée à 3 % par
+       an (distincte de N.g, qui sert à la projection future, pour que modifier la trajectoire ne
+       réécrive pas le passé) ;
+     - chaque cellule = ultime × part déjà réglée à l'âge k (pat : 40 % au bout d'un an,
+       jusqu'à 100 % au bout de huit ans), avec une petite oscillation de 0,4 % pour que les
+       facteurs de développement ne soient pas parfaitement réguliers.
+   Le triangle suit donc les primes, le ratio sinistres/primes et le facteur de queue.
+   Il peut aussi être saisi à la main (voir N.triAuto dans l'interface). */
+function buildTriangle(N) {
   const pat = [.40, .67, .82, .90, .945, .972, .988, 1.0];
   const tri = [];
   for (let i = 0; i < 8; i++) {
-    const ult = 215 * Math.pow(1.04, i) * (1 + 0.012 * Math.sin(i * 2.3));
+    const ult = (N.prem * N.lr / N.tail) / Math.pow(1.03, 7 - i);
     const row = [];
     for (let k = 0; k <= 7 - i; k++) row.push(Math.round(ult * pat[k] * (1 + 0.004 * Math.sin(i * 7 + k * 3)) * 10) / 10);
     tri.push(row);
@@ -110,7 +116,9 @@ const DEFAULTS = {
      catPct = charge catastrophe naturelle (part des primes dommages)
      lob = branches : pPrem / pRes = poids dans les primes / réserves,
            sp / sr = écart-type des primes / des réserves
-     tri = triangle de paiements cumulés */
+     tri = triangle de paiements cumulés (généré par buildTriangle à partir de prem, lr, tail)
+     triAuto = true tant que le triangle suit ces hypothèses ; passe à false si l'utilisateur
+               saisit une cellule à la main */
   nl: {
     prem: 380, g: 0.03, lr: 0.66, er: 0.28, upr: 0.45, riShare: 0.08, tail: 1.01, tailYears: 3, catPct: 0.14,
     lob: [
@@ -119,7 +127,7 @@ const DEFAULTS = {
       { n: 'Dommages aux biens', pPrem: 0.28, pRes: 0.18, sp: 0.08, sr: 0.10 },
       { n: 'RC générale', pPrem: 0.20, pRes: 0.32, sp: 0.14, sr: 0.11 }
     ],
-    tri: defaultTriangle()
+    tri: null, triAuto: true   /* tri est rempli juste après la définition de DEFAULTS */
   },
 
   /* Vie :
@@ -151,6 +159,7 @@ const DEFAULTS = {
     nl: [[1,.25],[.25,1]]
   }
 };
+DEFAULTS.nl.tri = buildTriangle(DEFAULTS.nl);
 
 /* Copie profonde d'un objet (pour ne pas modifier les hypothèses d'origine). */
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -606,7 +615,7 @@ const SCENARIOS = [
 ];
 
 /* Export : module Node (tests, notebooks) ou variable globale Model dans le navigateur. */
-const Model = { DEFAULTS, SCENARIOS, compute, project, clone, mkCurve, chainLadder, defaultTriangle, SH_UP, SH_DN, PD_BY_RATING };
+const Model = { DEFAULTS, SCENARIOS, compute, project, clone, mkCurve, chainLadder, buildTriangle, SH_UP, SH_DN, PD_BY_RATING };
 if (typeof module !== 'undefined' && module.exports) module.exports = Model;
 else root.Model = Model;
 })(typeof window !== 'undefined' ? window : globalThis);
