@@ -15,7 +15,7 @@ Ouvrir `index.html` dans un navigateur. Aucune dépendance, aucun build.
 - `src-head.html` : styles et squelette de la page.
 - `index.html` : page autonome assemblée à partir des fichiers ci-dessus.
 
-Pour réassembler : `cat src-head.html; echo '<script>'; cat model.js; echo '</script><script>'; cat ui1.js; echo '</script><script>'; cat ui2.js; echo '</script>'`
+Pour réassembler : `index.html` = doctype + `src-head.html` + `<script>` de `model.js`, `ui1.js`, `ui2.js`, puis `</body></html>`.
 
 ## Limites
 

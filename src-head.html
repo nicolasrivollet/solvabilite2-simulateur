@@ -20,6 +20,8 @@
   --accent:#4DB4BB; --accent-ink:#06191B; --ok:#3FBF86; --warn:#E0AE3A; --crit:#EA6F60;
   --c1:#6C98D0; --c2:#4DB4BB; --c3:#7FA6C4; --c4:#6FA19E; --c5:#CDB874; --c6:#A898C6; --c7:#7E8E9B; color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;padding-inline:16px}
 .wrap{max-width:1080px;margin:0 auto;padding-block:0 48px}
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px 0;border-bottom:1px solid var(--line)}
@@ -102,6 +104,8 @@ summary{cursor:pointer;font-weight:700;font-size:13px}
 }
 @media (prefers-reduced-motion:no-preference){.row .t i,.gauge i{transition:width .25s}}
 </style>
+</head>
+<body>
 <div class="wrap">
 <header class="top">
   <div class="bar">
