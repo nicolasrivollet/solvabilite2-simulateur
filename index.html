@@ -1,0 +1,885 @@
+<title>Simulateur Solvabilité II</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+/* Concept : tableau de bord de salle de marché prudentielle, bandeau de ratio permanent, onglets par bloc du bilan S2. */
+:root{
+  --bg:#EEF1F3; --surface:#FFFFFF; --ink:#13202B; --ink2:#51616F; --line:#D7DEE4; --track:#E4EAEE;
+  --accent:#0B6E75; --accent-ink:#FFFFFF;
+  --ok:#1C8A57; --warn:#C28A0A; --crit:#BF3B2D;
+  --c1:#16355C; --c2:#0B6E75; --c3:#5A86A8; --c4:#8FB3B0; --c5:#B9A56A; --c6:#8A7BA8; --c7:#A9B4BD;
+  --font:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E151B; --surface:#16202A; --ink:#E5ECF1; --ink2:#9AAEBD; --line:#2A3946; --track:#22303B;
+  --accent:#4DB4BB; --accent-ink:#06191B; --ok:#3FBF86; --warn:#E0AE3A; --crit:#EA6F60;
+  --c1:#6C98D0; --c2:#4DB4BB; --c3:#7FA6C4; --c4:#6FA19E; --c5:#CDB874; --c6:#A898C6; --c7:#7E8E9B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E151B; --surface:#16202A; --ink:#E5ECF1; --ink2:#9AAEBD; --line:#2A3946; --track:#22303B;
+  --accent:#4DB4BB; --accent-ink:#06191B; --ok:#3FBF86; --warn:#E0AE3A; --crit:#EA6F60;
+  --c1:#6C98D0; --c2:#4DB4BB; --c3:#7FA6C4; --c4:#6FA19E; --c5:#CDB874; --c6:#A898C6; --c7:#7E8E9B; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;padding-inline:16px}
+.wrap{max-width:1080px;margin:0 auto;padding-block:0 48px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px 0;border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:18px;font-weight:800;letter-spacing:-.01em;margin:0}
+h1 small{display:block;font-size:11px;font-weight:600;color:var(--ink2);letter-spacing:.06em;text-transform:uppercase}
+.live{display:flex;gap:16px;align-items:baseline}
+.live .k{font-size:10px;color:var(--ink2);letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+.live .v{font-family:var(--mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;font-weight:700;color:#fff}
+.pill.ok{background:var(--ok)}.pill.warn{background:var(--warn)}.pill.crit{background:var(--crit)}
+nav{display:flex;gap:2px;overflow-x:auto;margin-top:10px;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:none;border:0;background:none;color:var(--ink2);font:600 13px var(--font);padding:9px 12px;border-bottom:2px solid transparent;cursor:pointer}
+nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav button:focus-visible,input:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+main{padding-top:20px;display:grid;gap:20px}
+.tab{display:grid;gap:20px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.card h2{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);margin:0 0 12px}
+.card h3{font-size:13px;font-weight:700;margin:14px 0 6px}
+.note{color:var(--ink2);font-size:12px;margin:8px 0 0}
+.kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
+.kpi .k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}
+.kpi .v{font-family:var(--mono);font-size:28px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:2px}
+.kpi .s{font-size:12px;color:var(--ink2)}
+.num,td.n,th.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);white-space:nowrap}
+tr.tot td{font-weight:700;border-top:2px solid var(--ink)}
+td.mut{color:var(--ink2)}
+.f{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.f>span:first-child{font-size:13px}
+.in{display:flex;align-items:center;gap:6px}
+.in em{font-style:normal;font-size:11px;color:var(--ink2);min-width:26px}
+input[type=number]{width:84px;font:500 13px var(--mono);font-variant-numeric:tabular-nums;text-align:right;padding:5px 7px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)}
+select{font:500 13px var(--font);padding:5px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)}
+table input[type=number]{width:64px;padding:3px 5px}
+.rows{display:grid;gap:7px}
+.row{display:grid;grid-template-columns:minmax(90px,150px) 1fr 76px;gap:10px;align-items:center;font-size:13px}
+.row .t{height:14px;background:var(--track);border-radius:2px;position:relative;overflow:hidden}
+.row .t i{position:absolute;top:0;bottom:0;left:0;border-radius:2px;background:var(--c2)}
+.row .t i.neg{background:var(--c5)}
+.row .v{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.gauge{position:relative;height:22px;background:var(--track);border-radius:3px;margin:30px 0 22px}
+.gauge i{position:absolute;inset:0 auto 0 0;border-radius:3px}
+.gauge b{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--ink)}
+.gauge b span{position:absolute;top:-17px;left:50%;transform:translateX(-50%);font:500 10px var(--mono);color:var(--ink2)}
+.gauge b em{position:absolute;bottom:-17px;left:50%;transform:translateX(-50%);font:500 10px var(--mono);font-style:normal;color:var(--ink2)}
+.bs{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+.col{display:flex;flex-direction:column;min-height:300px;border-radius:3px;overflow:hidden}
+.col>div{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 8px;color:#fff;font-size:11px;font-weight:700;min-height:16px;overflow:hidden}
+.col>div span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col>div em{font:500 11px var(--mono);font-style:normal}
+.lh{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin-bottom:6px}
+.scn{display:grid;grid-template-columns:minmax(120px,190px) 1fr 70px 70px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.scn .t{height:12px;background:var(--track);border-radius:2px;position:relative}
+.scn .t i{position:absolute;top:0;bottom:0;border-radius:2px}
+.scn .t u{position:absolute;top:-3px;bottom:-3px;left:50%;width:1px;background:var(--ink2)}
+svg text{font-family:var(--mono);font-size:10px;fill:var(--ink2)}
+svg .ax{stroke:var(--line);stroke-width:1}
+svg .ln{fill:none;stroke-width:2}
+details{border-top:1px solid var(--line);padding-top:8px;margin-top:10px}
+summary{cursor:pointer;font-weight:700;font-size:13px}
+.mx td,.mx th{padding:3px 4px;text-align:center}
+.mx input{width:52px;text-align:center}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.btn{font:600 12px var(--font);padding:6px 10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:4px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.warnbox{border-left:3px solid var(--warn);padding:8px 12px;background:var(--bg);font-size:12px;color:var(--ink2)}
+@media (max-width:560px){
+  .row{grid-template-columns:90px 1fr 64px}
+  .scn{grid-template-columns:1fr 62px 62px}.scn .t{grid-column:1/-1;order:5}
+  .live .v{font-size:17px}
+  .bs{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){.row .t i,.gauge i{transition:width .25s}}
+</style>
+<div class="wrap">
+<header class="top">
+  <div class="bar">
+    <h1><small>Formule standard simplifiée · M€</small>Simulateur Solvabilité II</h1>
+    <div class="live" id="live"></div>
+  </div>
+  <nav role="tablist" id="nav"></nav>
+</header>
+<main>
+  <section class="tab" id="tab-syn"></section>
+  <section class="tab" id="tab-hyp" hidden></section>
+  <section class="tab" id="tab-prov" hidden></section>
+  <section class="tab" id="tab-scr" hidden></section>
+  <section class="tab" id="tab-fp" hidden></section>
+  <section class="tab" id="tab-chocs" hidden></section>
+  <section class="tab" id="tab-proj" hidden></section>
+  <p class="note">Modèle pédagogique. Calibrages indicatifs : pas de look-through, d'ajustement pour volatilité, de risque de change ni de concentration, risque santé exclu. Ne convient pas à un reporting réglementaire.</p>
+</main>
+</div>
+<script>
+/* Moteur actuariel simplifié, Solvabilité II (formule standard). Montants en M€. */
+(function (root) {
+'use strict';
+
+const SH_UP = [[1,.70],[2,.70],[3,.64],[4,.59],[5,.55],[6,.52],[7,.49],[8,.47],[9,.44],[10,.42],[11,.39],[12,.37],[13,.35],[14,.34],[15,.33],[16,.31],[17,.30],[18,.29],[19,.27],[20,.26],[90,.20]];
+const SH_DN = [[1,-.75],[2,-.65],[3,-.56],[4,-.50],[5,-.46],[6,-.42],[7,-.39],[8,-.36],[9,-.33],[10,-.31],[11,-.30],[12,-.29],[13,-.28],[14,-.28],[15,-.27],[16,-.28],[17,-.28],[18,-.28],[19,-.29],[20,-.29],[90,-.20]];
+const PD_BY_RATING = { 'AAA': 0.00002, 'AA': 0.0001, 'A': 0.0005, 'BBB': 0.0024, 'BB': 0.012, 'B': 0.042 };
+const SPREAD_F = { aa: 0.009, a: 0.011, bbb: 0.014, bb: 0.025, b: 0.045 };
+
+function interp(tab, t) {
+  if (t <= tab[0][0]) return tab[0][1];
+  for (let i = 1; i < tab.length; i++) {
+    if (t <= tab[i][0]) {
+      const [t0, v0] = tab[i - 1], [t1, v1] = tab[i];
+      return v0 + (v1 - v0) * (t - t0) / (t1 - t0);
+    }
+  }
+  return tab[tab.length - 1][1];
+}
+
+function defaultTriangle() {
+  const pat = [.40, .67, .82, .90, .945, .972, .988, 1.0];
+  const tri = [];
+  for (let i = 0; i < 8; i++) {
+    const ult = 215 * Math.pow(1.04, i) * (1 + 0.012 * Math.sin(i * 2.3));
+    const row = [];
+    for (let k = 0; k <= 7 - i; k++) row.push(Math.round(ult * pat[k] * (1 + 0.004 * Math.sin(i * 7 + k * 3)) * 10) / 10);
+    tri.push(row);
+  }
+  return tri;
+}
+
+const DEFAULTS = {
+  rateShort: 0.024, rateUlt: 0.033, theta: 8, coc: 0.06,
+  alloc: { gov: 40, corp: 34, eq1: 6, eq2: 2, prop: 6, cash: 12 },
+  mGov: 6, mCorp: 4, spreadCorp: 0.011,
+  rating: { aa: 20, a: 40, bbb: 35, bb: 5, b: 0 },
+  yEq: 0.065, yProp: 0.045, eqSA: 0,
+  otherAssets: 18, dta: 8, otherLiab: 22,
+  cap: { excess: 205, t1r: 20, t2: 50, dividend: 10, dtlCap: 45, taxRate: 0.25, amcr: 8, debtRate: 0.045, payout: 0.4 },
+  nl: {
+    prem: 380, g: 0.03, lr: 0.66, er: 0.28, upr: 0.45, riShare: 0.08, tail: 1.01, tailYears: 3, catPct: 0.14,
+    lob: [
+      { n: 'Auto RC', pPrem: 0.30, pRes: 0.38, sp: 0.10, sr: 0.09 },
+      { n: 'Auto dommages', pPrem: 0.22, pRes: 0.12, sp: 0.08, sr: 0.08 },
+      { n: 'Dommages aux biens', pPrem: 0.28, pRes: 0.18, sp: 0.08, sr: 0.10 },
+      { n: 'RC générale', pPrem: 0.20, pRes: 0.32, sp: 0.14, sr: 0.11 }
+    ],
+    tri: defaultTriangle()
+  },
+  vie: { pm: 1200, lapse: 0.04, qDeath: 0.004, fee: 0.009, expense: 0.0035, tmg: 0.01, infl: 0.018, car: 5000, qCar: 0.0012, carTerm: 8, rentes: 90, kLong: 0.22, fdb: 60, prem: 140, g: 0.02 },
+  cpty: { ri1: 'AA', ri2: 'A', split1: 0.6, bank: 'A', receivables: 6 },
+  corr: {
+    mktUp: [[1,0,0,0],[0,1,.75,.75],[0,.75,1,.5],[0,.75,.5,1]],
+    mktDn: [[1,.5,.5,.5],[.5,1,.75,.75],[.5,.75,1,.5],[.5,.75,.5,1]],
+    life: [[1,-.25,0,.25,.25],[-.25,1,.25,.25,0],[0,.25,1,.5,.25],[.25,.25,.5,1,.25],[.25,0,.25,.25,1]],
+    top: [[1,.25,.25,.25],[.25,1,.25,.5],[.25,.25,1,0],[.25,.5,0,1]],
+    lob: [[1,.5,.25,.5],[.5,1,.25,.25],[.25,.25,1,.25],[.5,.25,.25,1]],
+    nl: [[1,.25],[.25,1]]
+  }
+};
+
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function mkCurve(P, o) {
+  o = o || {};
+  return t => {
+    const tt = Math.max(t, 0);
+    let r = P.rateUlt - (P.rateUlt - P.rateShort) * Math.exp(-tt / P.theta) + (o.shift || 0) / 1e4;
+    if (o.type === 'up') r += Math.max(r * interp(SH_UP, Math.max(tt, 1)), 0.01);
+    else if (o.type === 'dn') r *= 1 + interp(SH_DN, Math.max(tt, 1));
+    return r;
+  };
+}
+const DF = (rf, t) => Math.pow(1 + rf(t), -t);
+
+function agg(v, c) {
+  let s = 0;
+  for (let i = 0; i < v.length; i++) for (let j = 0; j < v.length; j++) s += c[i][j] * v[i] * v[j];
+  return Math.sqrt(Math.max(s, 0));
+}
+
+function chainLadder(tri, tail, tailYears) {
+  const n = tri.length, f = [];
+  for (let k = 0; k < n - 1; k++) {
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) if (tri[i].length > k + 1) { num += tri[i][k + 1]; den += tri[i][k]; }
+    f.push(den > 0 ? num / den : 1);
+  }
+  const cf = new Array(n + tailYears + 2).fill(0);
+  const ult = [], latest = [], reserve = [], proj = [];
+  for (let i = 0; i < n; i++) {
+    const last = tri[i].length - 1;
+    let c = tri[i][last];
+    latest.push(c);
+    const prow = tri[i].slice();
+    for (let k = last; k < n - 1; k++) {
+      const nc = c * f[k];
+      cf[k + 1 - last] += nc - c;
+      c = nc;
+      prow.push(c);
+    }
+    const u = c * tail;
+    const tailAmt = u - c;
+    const startH = n - 1 - last;
+    for (let j = 1; j <= tailYears; j++) cf[startH + j] += tailAmt / tailYears;
+    ult.push(u); reserve.push(u - latest[i]); proj.push(prow);
+  }
+  const total = reserve.reduce((a, b) => a + b, 0);
+  return { f, cf, ult, latest, reserve, total, proj };
+}
+
+function pvCF(cf, rf) {
+  let s = 0;
+  for (let h = 1; h < cf.length; h++) s += cf[h] * DF(rf, h - 0.5);
+  return s;
+}
+
+function vieBE(P, rf, m) {
+  m = m || {};
+  const V = P.vie, T = 40;
+  const lapse = V.lapse * (m.lapseMult || 1), qd = V.qDeath * (m.qMult || 1);
+  const e = V.expense * (m.expMult || 1), infl = V.infl + (m.inflAdd || 0);
+  let R = V.pm * (m.scale || 1), be = 0;
+  const prof = [R];
+  for (let t = 0; t < T; t++) {
+    const d0 = DF(rf, t), d1 = DF(rf, t + 1);
+    const fwd = d0 / d1 - 1;
+    const c = Math.max(V.tmg, fwd - V.fee);
+    const gr = R * (1 + c), out = gr * Math.min(1, lapse + qd);
+    be += (out + e * R * Math.pow(1 + infl, t)) * d1;
+    R = gr - out;
+    prof.push(R);
+  }
+  be += R * DF(rf, T);
+  return { be, prof };
+}
+
+function weights(P) {
+  const a = P.alloc, s = a.gov + a.corp + a.eq1 + a.eq2 + a.prop + a.cash || 1;
+  const w = {};
+  Object.keys(a).forEach(k => w[k] = a[k] / s);
+  return w;
+}
+
+function bondDelta(mv, M, sp, r0, r1) {
+  return mv * (Math.pow((1 + r0(M) + sp) / (1 + r1(M) + sp), M) - 1);
+}
+
+function core(P, S, B, rmGuess) {
+  S = S || {};
+  const rf0 = mkCurve(P, {});
+  const rf = mkCurve(P, { shift: S.shiftBp || 0 });
+  const N = P.nl, V = P.vie, C = P.cap;
+
+  /* Provisions non-vie */
+  const cl = chainLadder(N.tri, N.tail, N.tailYears);
+  const pvBase = pvCF(cl.cf, rf);
+  const strain = S.reserveStrain || 0;
+  const beClaims = pvBase * (1 + strain) + (S.catNet || 0);
+  const cr = N.lr + (S.lrAdd || 0) + N.er;
+  const pp = N.upr * N.prem * (cr - 1);
+  const riRec = N.riShare * pvBase;
+
+  /* Provisions vie */
+  const v = vieBE(P, rf, { lapseMult: S.lapseMult });
+  const beVie = v.be;
+
+  /* Actifs */
+  const w = weights(P);
+  let assets;
+  const liabNoRM = beClaims + pp + beVie + P.otherLiab + C.t1r + C.t2;
+  if (B) {
+    const gov = B.assets.gov + bondDelta(B.assets.gov, P.mGov, 0, rf0, rf);
+    const corpR = B.assets.corp + bondDelta(B.assets.corp, P.mCorp, P.spreadCorp, rf0, rf);
+    assets = {
+      gov, corp: corpR * (1 - (S.spreadBp || 0) / 1e4 * P.mCorp),
+      eq1: B.assets.eq1 * (1 + (S.eq || 0)), eq2: B.assets.eq2 * (1 + (S.eq || 0)),
+      prop: B.assets.prop * (1 + (S.prop || 0)), cash: B.assets.cash
+    };
+  } else {
+    const inv = liabNoRM + rmGuess + C.excess - riRec - P.otherAssets;
+    assets = {};
+    Object.keys(w).forEach(k => assets[k] = inv * w[k]);
+  }
+
+  /* SCR marché */
+  const durG = P.mGov, durC = P.mCorp;
+  function irLoss(type) {
+    const rs = mkCurve(P, { type, shift: S.shiftBp || 0 });
+    const dA = bondDelta(assets.gov, P.mGov, 0, rf, rs) + bondDelta(assets.corp, P.mCorp, P.spreadCorp, rf, rs);
+    const pvS = pvCF(cl.cf, rs);
+    const dRR = N.riShare * (pvS - pvBase);
+    const dL = (pvS - pvBase) * (1 + strain) + (vieBE(P, rs, { lapseMult: S.lapseMult }).be - beVie);
+    return -(dA + dRR - dL);
+  }
+  const irUp = irLoss('up'), irDn = irLoss('dn');
+  const sa = P.eqSA;
+  const eq1 = (0.39 + sa) * assets.eq1, eq2 = (0.49 + sa) * assets.eq2;
+  const eqSCR = Math.sqrt(eq1 * eq1 + eq2 * eq2 + 2 * 0.75 * eq1 * eq2);
+  const propSCR = 0.25 * assets.prop;
+  const rt = P.rating;
+  const rs_ = rt.aa + rt.a + rt.bbb + rt.bb + rt.b || 1;
+  const sprF = (rt.aa * SPREAD_F.aa + rt.a * SPREAD_F.a + rt.bbb * SPREAD_F.bbb + rt.bb * SPREAD_F.bb + rt.b * SPREAD_F.b) / rs_;
+  const sprSCR = Math.min(1, sprF * durC) * assets.corp;
+  const mUp = agg([Math.max(0, irUp), eqSCR, propSCR, sprSCR], P.corr.mktUp);
+  const mDn = agg([Math.max(0, irDn), eqSCR, propSCR, sprSCR], P.corr.mktDn);
+  const mkt = Math.max(mUp, mDn);
+  const irSCR = Math.max(0, irUp, irDn);
+
+  /* SCR souscription non-vie */
+  const lobRows = N.lob.map(l => {
+    const Vp = N.prem * (1 + N.g) * l.pPrem, Vr = beClaims * l.pRes;
+    const sig = Math.sqrt(l.sp * l.sp * Vp * Vp + l.sr * l.sr * Vr * Vr + 2 * 0.5 * l.sp * l.sr * Vp * Vr) / Math.max(Vp + Vr, 1e-9);
+    return { n: l.n, Vp, Vr, sig, scr: 3 * sig * (Vp + Vr) };
+  });
+  const prSCR = agg(lobRows.map(r => r.scr), P.corr.lob);
+  const catBase = N.prem * (N.lob[1].pPrem + N.lob[2].pPrem);
+  const catSCR = N.catPct * catBase;
+  const nl = agg([prSCR, catSCR], P.corr.nl);
+
+  /* SCR souscription vie */
+  let ann = 0;
+  for (let t = 1; t <= V.carTerm; t++) ann += DF(rf, t);
+  const mort = 0.15 * V.qCar * V.car * ann;
+  const long = 0.20 * V.kLong * V.rentes;
+  const lapDn = vieBE(P, rf, { lapseMult: 0.5 * (S.lapseMult || 1) }).be - beVie;
+  const lapUp = vieBE(P, rf, { lapseMult: 1.5 * (S.lapseMult || 1) }).be - beVie;
+  const lapMass = 0.4 * (V.pm - beVie);
+  const lap = Math.max(0, lapDn, lapUp, lapMass);
+  const exp = Math.max(0, vieBE(P, rf, { expMult: 1.1, inflAdd: 0.01, lapseMult: S.lapseMult }).be - beVie);
+  const catV = 0.0015 * V.car;
+  const lifeParts = [mort, long, lap, exp, catV];
+  const life = agg(lifeParts, P.corr.life);
+
+  /* Défaut de contrepartie */
+  const pdOf = r => PD_BY_RATING[r] || 0.0005;
+  function sigma(E, pd) {
+    const lgd = 0.5 * E;
+    return lgd * Math.sqrt(1.5 * pd * (1 - pd) / (1 - 2.5 * pd));
+  }
+  const cp = P.cpty;
+  const exposures = [
+    { n: 'Réassureur 1 (' + cp.ri1 + ')', E: riRec * cp.split1, pd: pdOf(cp.ri1) },
+    { n: 'Réassureur 2 (' + cp.ri2 + ')', E: riRec * (1 - cp.split1), pd: pdOf(cp.ri2) },
+    { n: 'Banque (' + cp.bank + ')', E: assets.cash, pd: pdOf(cp.bank) }
+  ];
+  const t1 = Math.min(3 * Math.sqrt(exposures.reduce((s, x) => s + Math.pow(sigma(x.E, x.pd), 2), 0)), 0.5 * exposures.reduce((s, x) => s + x.E, 0));
+  const t2 = 0.15 * cp.receivables;
+  const def = Math.sqrt(t1 * t1 + t2 * t2 + 2 * 0.75 * t1 * t2);
+
+  /* Agrégation */
+  const bscr = agg([mkt, def, life, nl], P.corr.top);
+  const earnedLife = V.prem, earnedNL = N.prem;
+  const opPrem = 0.04 * earnedLife + 0.03 * earnedNL;
+  const opProv = 0.0045 * beVie + 0.03 * Math.max(beClaims + pp, 0);
+  const op = Math.min(0.3 * bscr, Math.max(opPrem, opProv));
+  const lacFDB = Math.min(V.fdb, mkt);
+  const lacDT = Math.min(C.taxRate * Math.max(0, bscr + op - lacFDB), C.dtlCap);
+  const scr = bscr + op - lacFDB - lacDT;
+
+  /* Marge de risque */
+  const bscrRU = agg([def, life, nl], [[1,.25,.5],[.25,1,0],[.5,0,1]]);
+  const opRU = Math.min(0.3 * bscrRU, Math.max(opPrem, opProv));
+  const scrRU = bscrRU + opRU;
+  const remNL0 = cl.cf.reduce((a, b) => a + b, 0);
+  let sNL = 0, sV = 0;
+  const rmProfile = [];
+  for (let t = 0; t < v.prof.length - 1; t++) {
+    let remNL = 0;
+    for (let h = t + 1; h < cl.cf.length; h++) remNL += cl.cf[h];
+    const rN = remNL0 > 0 ? remNL / remNL0 : 0, rV = v.prof[t] / v.prof[0];
+    rmProfile.push({ nl: rN, vie: rV });
+    sNL += rN * DF(rf, t + 1);
+    sV += rV * DF(rf, t + 1);
+  }
+  const shNL = nl + life > 0 ? nl / (nl + life) : 0.5;
+  const rmCalc = P.coc * scrRU * (shNL * sNL + (1 - shNL) * sV);
+  const rm = B ? rmCalc : rmGuess;
+
+  /* Bilan */
+  const liabTotal = liabNoRM + rm;
+  const assetInv = Object.values(assets).reduce((a, b) => a + b, 0);
+  const assetTotal = assetInv + riRec + P.otherAssets;
+  const excess = assetTotal - liabTotal;
+
+  /* Fonds propres et éligibilité */
+  const divd = S.dividend != null ? S.dividend : C.dividend;
+  const ofTotal = excess + C.t1r + C.t2 - divd;
+  const t3 = P.dta;
+  const t1u = Math.max(0, ofTotal - C.t1r - C.t2 - t3);
+  const t1rEl = Math.min(C.t1r, 0.25 * t1u);
+  const t3El = Math.min(t3, 0.15 * Math.max(scr, 0));
+  const t2El = Math.max(0, Math.min(C.t2, 0.5 * scr - t3El));
+  const elig = Math.max(0, t1u + t1rEl + t2El + t3El);
+  const mcrLin = 0.08 * Math.max(0, beClaims) + 0.07 * N.prem + 0.037 * beVie + 0.0007 * V.car;
+  const mcr = Math.max(Math.min(Math.max(mcrLin, 0.25 * scr), 0.45 * scr), C.amcr);
+  const t2Mcr = Math.min(C.t2, 0.2 * mcr, t2El);
+  const eligMcr = Math.max(0, t1u + t1rEl + t2Mcr);
+
+  const pYield = w.gov * rf0(P.mGov) + w.corp * (rf0(P.mCorp) + P.spreadCorp) + (w.eq1 + w.eq2) * P.yEq + w.prop * P.yProp + w.cash * rf0(1);
+
+  return {
+    rf0, cl, w, pYield,
+    prov: { beClaims, pp, riRec, beVie, rm, rmCalc, scrRU, nlTotal: beClaims + pp, total: beClaims + pp + beVie + rm, vieProfile: v.prof, rmProfile, rmShare: shNL },
+    assets: Object.assign({}, assets, { ri: riRec, other: P.otherAssets }), assetTotal,
+    liab: { nl: beClaims + pp, vie: beVie, rm, other: P.otherLiab, sub: C.t1r + C.t2, total: liabTotal },
+    excess,
+    scr: {
+      mkt, def, life, nl, bscr, op, lacFDB, lacDT, total: scr,
+      mktParts: { Taux: irSCR, Actions: eqSCR, Immobilier: propSCR, Spread: sprSCR },
+      irUp, irDn,
+      nlParts: { 'Primes et réserves': prSCR, 'Catastrophe': catSCR },
+      lob: lobRows,
+      lifeParts: { Mortalité: mort, Longévité: long, Rachats: lap, Frais: exp, Catastrophe: catV },
+      lapseDetail: { lapDn, lapUp, lapMass },
+      defParts: { exposures, t1, t2 }
+    },
+    of: { total: ofTotal, t1u, t1r: C.t1r, t1rEl, t2: C.t2, t2El, t3, t3El, elig, divd, eligMcr },
+    mcr: { lin: mcrLin, total: mcr },
+    ratio: scr > 0 ? elig / scr : Infinity,
+    ratioMcr: mcr > 0 ? eligMcr / mcr : Infinity
+  };
+}
+
+function compute(P, S) {
+  const hasS = S && Object.keys(S).length > 0;
+  if (hasS) return core(P, S, compute(P, null), 0);
+  let rm = 0, r;
+  for (let i = 0; i < 4; i++) { r = core(P, null, null, rm); rm = r.prov.rmCalc; }
+  return r;
+}
+
+function project(P, years) {
+  years = years || 5;
+  const C = P.cap, rows = [];
+  let Pt = clone(P), res = compute(Pt), excess = Pt.cap.excess, prevDiv = Pt.cap.dividend;
+  rows.push({ y: 0, scr: res.scr.total, elig: res.of.elig, ratio: res.ratio, net: null, div: prevDiv, excess });
+  for (let y = 1; y <= years; y++) {
+    const gN = Pt.nl.g, gV = Pt.vie.g;
+    Pt.nl.prem *= 1 + gN;
+    Pt.nl.tri = Pt.nl.tri.map(r => r.map(x => x * (1 + gN)));
+    Pt.vie.pm *= 1 + gV; Pt.vie.car *= 1 + gV; Pt.vie.rentes *= 1 + gV; Pt.vie.prem *= 1 + gV;
+    const uw = Pt.nl.prem * (1 - Pt.nl.lr - Pt.nl.er);
+    const fin = (excess + res.prov.nlTotal) * res.pYield - res.prov.nlTotal * res.rf0(3);
+    const vm = res.prov.vieProfile[0] * (Pt.vie.fee - Pt.vie.expense);
+    const pre = uw + fin + vm - (C.t1r + C.t2) * C.debtRate;
+    const net = pre - C.taxRate * Math.max(0, pre);
+    const div = C.payout * Math.max(0, net);
+    excess = excess + net - prevDiv;
+    prevDiv = div;
+    Pt.cap.excess = excess; Pt.cap.dividend = div;
+    res = compute(Pt);
+    rows.push({ y, scr: res.scr.total, elig: res.of.elig, ratio: res.ratio, net, div, excess, uw, fin, vm });
+  }
+  return rows;
+}
+
+const SCENARIOS = [
+  { id: 'rUp', n: 'Taux +100 pb', s: { shiftBp: 100 } },
+  { id: 'rDn', n: 'Taux −100 pb', s: { shiftBp: -100 } },
+  { id: 'eq', n: 'Actions −30 %', s: { eq: -0.30 } },
+  { id: 'prop', n: 'Immobilier −20 %', s: { prop: -0.20 } },
+  { id: 'spr', n: 'Spreads +100 pb', s: { spreadBp: 100 } },
+  { id: 'res', n: 'Sous-provisionnement +10 %', s: { reserveStrain: 0.10 } },
+  { id: 'lr', n: 'Sinistralité +5 pts', s: { lrAdd: 0.05 } },
+  { id: 'cat', n: 'Tempête 60 M€ nets', s: { catNet: 60 } },
+  { id: 'lap', n: 'Rachats ×2', s: { lapseMult: 2 } },
+  { id: 'comb', n: 'Combiné sévère', s: { shiftBp: -50, eq: -0.25, prop: -0.15, spreadBp: 80, reserveStrain: 0.05, catNet: 40, lapseMult: 1.5 } }
+];
+
+const Model = { DEFAULTS, SCENARIOS, compute, project, clone, mkCurve, chainLadder, defaultTriangle, SH_UP, SH_DN, PD_BY_RATING };
+if (typeof module !== 'undefined' && module.exports) module.exports = Model;
+else root.Model = Model;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script><script>
+(function () {
+'use strict';
+const M = window.Model;
+const A = window.App = { M, P: M.clone(M.DEFAULTS), res: null, tabs: {}, active: 'syn' };
+
+A.get = (o, p) => p.split('.').reduce((a, k) => a[k], o);
+A.set = (o, p, v) => { const ks = p.split('.'), l = ks.pop(); ks.reduce((a, k) => a[k], o)[l] = v; };
+A.fmt = (x, d) => isFinite(x) ? x.toLocaleString('fr-FR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }) : '∞';
+A.pc = (x, d) => isFinite(x) ? (x * 100).toLocaleString('fr-FR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }) + ' %' : '∞';
+A.state = r => r < 1 ? 'crit' : r < 1.5 ? 'warn' : 'ok';
+A.stateLabel = r => r < 1 ? 'Sous le SCR' : r < 1.5 ? 'Sous 150 %' : 'Confortable';
+const { fmt, pc } = A;
+
+/* Champ de saisie : s = facteur d'affichage (100 pour les pourcentages) */
+A.fld = (label, path, o) => {
+  o = o || {};
+  const s = o.s || 1, v = Math.round(A.get(A.P, path) * s * 1e6) / 1e6;
+  return `<label class="f"><span>${label}</span><span class="in"><input type="number" inputmode="decimal" data-p="${path}" data-s="${s}" step="${o.step || 'any'}" value="${v}"><em>${o.u || ''}</em></span></label>`;
+};
+A.sel = (label, path, opts) => {
+  const cur = A.get(A.P, path);
+  return `<label class="f"><span>${label}</span><select data-p="${path}">${opts.map(x => `<option${x === cur ? ' selected' : ''}>${x}</option>`).join('')}</select></label>`;
+};
+
+A.bars = (rows, o) => {
+  o = o || {};
+  const mx = Math.max(o.max || 0, ...rows.map(r => Math.abs(r.v)), 1e-9);
+  return '<div class="rows">' + rows.map(r =>
+    `<div class="row"><span>${r.l}</span><span class="t"><i class="${r.v < 0 ? 'neg' : ''}" style="width:${Math.min(100, Math.abs(r.v) / mx * 100)}%;${r.c ? 'background:' + r.c : ''}"></i></span><span class="v">${fmt(r.v, o.d || 0)}</span></div>`).join('') + '</div>';
+};
+
+/* Graphique en courbes : series [{pts:[[x,y]], c, dash}], lignes de repère [{y, l}] */
+A.line = (series, o) => {
+  const W = 640, H = 230, L = 44, R = 12, T = 12, B = 26;
+  const xs = series.flatMap(s => s.pts.map(p => p[0])), ys = series.flatMap(s => s.pts.map(p => p[1])).concat((o.refs || []).map(r => r.y));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  let y0 = o.y0 != null ? o.y0 : Math.min(...ys), y1 = Math.max(...ys);
+  const pad = (y1 - y0) * 0.08 || 1; y1 += pad; if (o.y0 == null) y0 -= pad;
+  const X = x => L + (x - x0) / ((x1 - x0) || 1) * (W - L - R), Y = y => H - B - (y - y0) / ((y1 - y0) || 1) * (H - B - T);
+  let g = '';
+  for (let i = 0; i <= 4; i++) { const y = y0 + (y1 - y0) * i / 4; g += `<line class="ax" x1="${L}" x2="${W - R}" y1="${Y(y)}" y2="${Y(y)}"/><text x="${L - 6}" y="${Y(y) + 3}" text-anchor="end">${o.yf ? o.yf(y) : fmt(y)}</text>`; }
+  const step = Math.max(1, Math.ceil((x1 - x0) / 8));
+  for (let x = x0; x <= x1; x += step) g += `<text x="${X(x)}" y="${H - 8}" text-anchor="middle">${o.xf ? o.xf(x) : x}</text>`;
+  (o.refs || []).forEach(r => { g += `<line x1="${L}" x2="${W - R}" y1="${Y(r.y)}" y2="${Y(r.y)}" stroke="${r.c || 'var(--ink2)'}" stroke-dasharray="4 4"/><text x="${W - R}" y="${Y(r.y) - 4}" text-anchor="end">${r.l}</text>`; });
+  series.forEach(s => {
+    g += `<polyline class="ln" stroke="${s.c}" points="${s.pts.map(p => X(p[0]) + ',' + Y(p[1])).join(' ')}"/>`;
+    if (s.dots) s.pts.forEach(p => { g += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" fill="${s.c}"/>`; });
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${o.label || 'graphique'}" style="max-width:100%;height:auto">${g}</svg>`;
+};
+
+A.matrix = (key, names) => {
+  const m = A.P.corr[key];
+  return `<div class="scroll"><table class="mx"><tr><th></th>${names.map(n => `<th>${n}</th>`).join('')}</tr>` +
+    m.map((row, i) => `<tr><th>${names[i]}</th>${row.map((v, j) => i === j ? '<td class="mut">1</td>' : `<td><input type="number" step="0.05" min="-1" max="1" data-corr="${key},${i},${j}" value="${v}"></td>`).join('')}</tr>`).join('') + '</table></div>';
+};
+
+/* ---------- En-tête ---------- */
+A.renderLive = r => {
+  const st = A.state(r.ratio);
+  $('#live').innerHTML = `<div><div class="k">Ratio SCR</div><div class="v">${pc(r.ratio)}</div></div><div><div class="k">Ratio MCR</div><div class="v">${pc(r.ratioMcr)}</div></div><span class="pill ${st}">${A.stateLabel(r.ratio)}</span>`;
+};
+function $(s) { return document.querySelector(s); }
+A.$ = $;
+
+/* ---------- Synthèse ---------- */
+A.tabs.syn = {
+  label: 'Synthèse',
+  build() {
+    $('#tab-syn').innerHTML = `
+      <div class="kpis" id="syn-kpi"></div>
+      <div class="grid">
+        <div class="card"><h2>Couverture du SCR</h2><div id="syn-gauge"></div><div id="syn-cov"></div></div>
+        <div class="card"><h2>Du SCR de base au SCR final</h2><div id="syn-scr"></div></div>
+      </div>
+      <div class="card"><h2>Bilan économique</h2><div class="bs" id="syn-bs"></div><p class="note">Hauteur proportionnelle à la valeur de marché. Le passif inclut la marge de risque et les dettes subordonnées ; le solde est l'excédent d'actifs sur passifs.</p></div>`;
+  },
+  update(r) {
+    const st = A.state(r.ratio);
+    $('#syn-kpi').innerHTML = [
+      ['Ratio de solvabilité', pc(r.ratio), `<span class="pill ${st}">${A.stateLabel(r.ratio)}</span>`],
+      ['Ratio MCR', pc(r.ratioMcr), 'seuil réglementaire 100 %'],
+      ['Fonds propres éligibles', fmt(r.of.elig, 1), 'couverture du SCR'],
+      ['SCR', fmt(r.scr.total, 1), 'MCR ' + fmt(r.mcr.total, 1)]
+    ].map(k => `<div class="kpi"><div class="k">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('');
+    const sc = 3, w = Math.min(100, r.ratio / sc * 100);
+    $('#syn-gauge').innerHTML = `<div class="gauge"><i style="width:${w}%;background:var(--${st})"></i><b style="left:${100 / sc}%"><span>100 %</span></b><b style="left:${150 / sc}%"><span>150 %</span></b></div>`;
+    $('#syn-cov').innerHTML = A.bars([{ l: 'Fonds propres éligibles', v: r.of.elig, c: 'var(--c2)' }, { l: 'SCR', v: r.scr.total, c: 'var(--c1)' }, { l: 'MCR', v: r.mcr.total, c: 'var(--c3)' }], { d: 1 });
+    const s = r.scr;
+    $('#syn-scr').innerHTML = A.bars([
+      { l: 'Marché', v: s.mkt }, { l: 'Contrepartie', v: s.def }, { l: 'Souscription vie', v: s.life }, { l: 'Souscription non-vie', v: s.nl },
+      { l: 'BSCR (diversifié)', v: s.bscr, c: 'var(--c1)' }, { l: 'Opérationnel', v: s.op }, { l: 'Absorption PB futures', v: -s.lacFDB }, { l: 'Absorption imp. différés', v: -s.lacDT }, { l: 'SCR', v: s.total, c: 'var(--c1)' }
+    ], { d: 1 });
+    const a = r.assets, l = r.liab;
+    const colA = [["Obligations d'État", a.gov], ['Obligations privées', a.corp], ['Actions', a.eq1 + a.eq2], ['Immobilier', a.prop], ['Trésorerie', a.cash], ['Part des réassureurs', a.ri], ['Autres actifs', a.other]];
+    const colP = [['Excédent (FP de base)', r.excess], ['Dettes subordonnées', l.sub], ['Autres passifs', l.other], ['Marge de risque', l.rm], ['Meilleure estimation vie', l.vie], ['Meilleure estimation non-vie', l.nl]];
+    const seg = (rows, cols) => rows.map((x, i) => `<div style="flex:${Math.max(x[1], 0.001)} 1 0;background:var(--c${cols[i]})"><span>${x[0]}</span><em>${fmt(x[1])}</em></div>`).join('');
+    $('#syn-bs').innerHTML = `<div><div class="lh">Actif · ${fmt(r.assetTotal)}</div><div class="col">${seg(colA, [1, 2, 3, 4, 5, 6, 7])}</div></div><div><div class="lh">Passif · ${fmt(l.total + r.excess)}</div><div class="col">${seg(colP, [2, 6, 7, 5, 1, 3])}</div></div>`;
+  }
+};
+
+/* ---------- Hypothèses ---------- */
+A.tabs.hyp = {
+  label: 'Hypothèses',
+  build() {
+    const F = A.fld, P = A.P;
+    const lob = P.nl.lob.map((l, i) => `<tr><td>${l.n}</td>${['pPrem', 'pRes', 'sp', 'sr'].map(k => `<td><input type="number" step="any" data-p="nl.lob.${i}.${k}" data-s="100" value="${Math.round(l[k] * 1e4) / 100}"></td>`).join('')}</tr>`).join('');
+    $('#tab-hyp').innerHTML = `
+      <div class="bar"><p class="note" style="margin:0">Toutes les saisies recalculent le modèle immédiatement.</p><button class="btn" id="reset">Valeurs par défaut</button></div>
+      <div class="grid">
+        <div class="card"><h2>Courbe des taux sans risque</h2>
+          ${F('Taux court (spot 0)', 'rateShort', { s: 100, step: 0.05, u: '%' })}${F('Taux ultime (UFR)', 'rateUlt', { s: 100, step: 0.05, u: '%' })}${F('Vitesse de convergence', 'theta', { u: 'ans' })}${F('Coût du capital (marge de risque)', 'coc', { s: 100, step: 0.5, u: '%' })}
+          <p class="note">Spot : r(t) = UFR − (UFR − court) · e<sup>−t/θ</sup>. Chocs de taux EIOPA appliqués par maturité.</p></div>
+        <div class="card"><h2>Allocation d'actifs (normalisée à 100)</h2>
+          ${F("Obligations d'État", 'alloc.gov', { u: '%' })}${F('Obligations privées', 'alloc.corp', { u: '%' })}${F('Actions type 1', 'alloc.eq1', { u: '%' })}${F('Actions type 2', 'alloc.eq2', { u: '%' })}${F('Immobilier', 'alloc.prop', { u: '%' })}${F('Trésorerie', 'alloc.cash', { u: '%' })}
+          <p class="note" id="alloc-sum"></p></div>
+        <div class="card"><h2>Portefeuille obligataire</h2>
+          ${F('Maturité moyenne, États', 'mGov', { u: 'ans' })}${F('Maturité moyenne, privées', 'mCorp', { u: 'ans' })}${F('Spread moyen, privées', 'spreadCorp', { s: 100, step: 0.05, u: '%' })}
+          <h3>Notation des obligations privées (%)</h3>
+          ${F('AAA / AA', 'rating.aa', { u: '%' })}${F('A', 'rating.a', { u: '%' })}${F('BBB', 'rating.bbb', { u: '%' })}${F('BB', 'rating.bb', { u: '%' })}${F('B et moins', 'rating.b', { u: '%' })}
+          <h3>Actions et immobilier</h3>
+          ${F('Rendement attendu actions', 'yEq', { s: 100, step: 0.1, u: '%' })}${F('Rendement immobilier', 'yProp', { s: 100, step: 0.1, u: '%' })}${F('Ajustement symétrique actions', 'eqSA', { s: 100, step: 0.5, u: 'pts' })}</div>
+        <div class="card"><h2>Non-vie</h2>
+          ${F('Primes émises', 'nl.prem', { u: 'M€' })}${F('Croissance annuelle', 'nl.g', { s: 100, step: 0.5, u: '%' })}${F('Ratio sinistres / primes', 'nl.lr', { s: 100, step: 0.5, u: '%' })}${F('Ratio de frais', 'nl.er', { s: 100, step: 0.5, u: '%' })}${F('Provision pour primes non acquises', 'nl.upr', { s: 100, step: 1, u: '% prim.' })}${F('Part des réassureurs', 'nl.riShare', { s: 100, step: 0.5, u: '%' })}${F('Facteur de queue', 'nl.tail', { step: 0.005, u: '×' })}${F('Durée de la queue', 'nl.tailYears', { u: 'ans' })}${F('Charge catastrophe naturelle', 'nl.catPct', { s: 100, step: 0.5, u: '% prim.' })}</div>
+        <div class="card"><h2>Vie (épargne en euros et prévoyance)</h2>
+          ${F('Provisions mathématiques', 'vie.pm', { u: 'M€' })}${F('Taux de rachat annuel', 'vie.lapse', { s: 100, step: 0.25, u: '%' })}${F('Mortalité épargne', 'vie.qDeath', { s: 100, step: 0.05, u: '%' })}${F('Marge de gestion', 'vie.fee', { s: 100, step: 0.05, u: '%' })}${F('Frais de gestion', 'vie.expense', { s: 100, step: 0.05, u: '%' })}${F('Taux minimum garanti', 'vie.tmg', { s: 100, step: 0.1, u: '%' })}${F('Inflation des frais', 'vie.infl', { s: 100, step: 0.1, u: '%' })}${F('Capitaux sous risque', 'vie.car', { u: 'M€' })}${F('Mortalité sur capitaux', 'vie.qCar', { s: 100, step: 0.01, u: '%' })}${F('Durée moyenne des garanties décès', 'vie.carTerm', { u: 'ans' })}${F('Provisions de rentes', 'vie.rentes', { u: 'M€' })}${F('Sensibilité longévité', 'vie.kLong', { step: 0.01, u: '×' })}${F('PB futures discrétionnaires', 'vie.fdb', { u: 'M€' })}${F('Primes vie', 'vie.prem', { u: 'M€' })}${F('Croissance des provisions', 'vie.g', { s: 100, step: 0.5, u: '%' })}</div>
+        <div class="card"><h2>Fonds propres et fiscalité</h2>
+          ${F("Excédent d'actifs sur passifs", 'cap.excess', { u: 'M€' })}${F('Dette subordonnée perpétuelle (T1 restreint)', 'cap.t1r', { u: 'M€' })}${F('Dette subordonnée datée (T2)', 'cap.t2', { u: 'M€' })}${F('Impôts différés actifs nets (T3)', 'dta', { u: 'M€' })}${F('Dividende prévisible', 'cap.dividend', { u: 'M€' })}${F('Taux d\'impôt', 'cap.taxRate', { s: 100, step: 0.5, u: '%' })}${F('Plafond absorption imp. différés', 'cap.dtlCap', { u: 'M€' })}${F('Plancher absolu du MCR', 'cap.amcr', { u: 'M€' })}${F('Coût de la dette subordonnée', 'cap.debtRate', { s: 100, step: 0.1, u: '%' })}${F('Taux de distribution', 'cap.payout', { s: 100, step: 5, u: '%' })}${F('Autres actifs', 'otherAssets', { u: 'M€' })}${F('Autres passifs', 'otherLiab', { u: 'M€' })}</div>
+        <div class="card"><h2>Réassurance et contreparties</h2>
+          ${A.sel('Réassureur 1', 'cpty.ri1', ['AAA', 'AA', 'A', 'BBB', 'BB', 'B'])}${A.sel('Réassureur 2', 'cpty.ri2', ['AAA', 'AA', 'A', 'BBB', 'BB', 'B'])}${F('Part du réassureur 1', 'cpty.split1', { s: 100, step: 5, u: '%' })}${A.sel('Banque (trésorerie)', 'cpty.bank', ['AAA', 'AA', 'A', 'BBB', 'BB', 'B'])}${F('Créances sur assurés > 3 mois', 'cpty.receivables', { u: 'M€' })}</div>
+        <div class="card"><h2>Branches non-vie (SCR primes et réserves)</h2><div class="scroll"><table><tr><th>Branche</th><th class="n">Part primes %</th><th class="n">Part réserves %</th><th class="n">σ primes %</th><th class="n">σ réserves %</th></tr>${lob}</table></div><p class="note">Les parts de primes et de réserves doivent chacune totaliser 100 %. σ : écarts-types indicatifs.</p></div>
+      </div>`;
+    $('#reset').onclick = () => { A.P = M.clone(M.DEFAULTS); A.buildAll(); A.refresh(); };
+  },
+  update() {
+    const a = A.P.alloc, s = a.gov + a.corp + a.eq1 + a.eq2 + a.prop + a.cash;
+    const el = $('#alloc-sum'); if (el) el.textContent = 'Total saisi : ' + fmt(s) + ' %' + (Math.abs(s - 100) > 0.01 ? ' (ramené à 100 dans le calcul)' : '');
+  }
+};
+})();
+</script><script>
+(function () {
+'use strict';
+const A = window.App, M = A.M, $ = A.$, fmt = A.fmt, pc = A.pc;
+
+/* ---------- Provisions ---------- */
+A.tabs.prov = {
+  label: 'Provisions',
+  build() {
+    const tri = A.P.nl.tri, n = tri.length;
+    let h = '<tr><th>Année de survenance</th>' + tri[0].map((_, k) => `<th class="n">An ${k}</th>`).join('') + '<th class="n">Ultime</th><th class="n">Réserve</th></tr>';
+    tri.forEach((row, i) => {
+      h += `<tr><td>${n - 1 - i === 0 ? 'N' : 'N−' + (n - 1 - i)}</td>`;
+      for (let k = 0; k < n; k++) h += k < row.length ? `<td class="n"><input type="number" step="any" data-tri="${i},${k}" value="${row[k]}"></td>` : `<td class="n mut" id="pc-${i}-${k}"></td>`;
+      h += `<td class="n" id="ul-${i}"></td><td class="n" id="rs-${i}"></td></tr>`;
+    });
+    h += '<tr class="tot"><td>Facteur de développement</td>' + tri[0].map((_, k) => `<td class="n" id="cf-${k}">${k < n - 1 ? '' : ''}</td>`).join('') + '<td></td><td class="n" id="rs-tot"></td></tr>';
+    $('#tab-prov').innerHTML = `
+      <div class="card"><h2>Triangle des paiements cumulés et Chain Ladder</h2><div class="scroll"><table>${h}</table></div>
+        <p class="note">Saisissez les paiements cumulés observés (M€). Les cellules grisées sont projetées par Chain Ladder (facteurs pondérés par les volumes), puis une queue est ajoutée.</p></div>
+      <div id="prov-out" class="grid"></div>`;
+  },
+  update(r) {
+    const tri = A.P.nl.tri, n = tri.length;
+    tri.forEach((row, i) => {
+      for (let k = row.length; k < n; k++) { const e = $(`#pc-${i}-${k}`); if (e) e.textContent = fmt(r.cl.proj[i][k], 1); }
+      $(`#ul-${i}`).textContent = fmt(r.cl.ult[i], 1); $(`#rs-${i}`).textContent = fmt(r.cl.reserve[i], 1);
+    });
+    for (let k = 0; k < n; k++) { const e = $(`#cf-${k}`); if (e) e.textContent = k < n - 1 ? r.cl.f[k].toFixed(3).replace('.', ',') : A.P.nl.tail.toFixed(3).replace('.', ','); }
+    $('#rs-tot').textContent = fmt(r.cl.total, 1);
+    const p = r.prov;
+    const cf = r.cl.cf.map((v, h) => ({ l: h === 0 ? null : 'Année +' + h, v })).filter(x => x.l && x.v > 0.05);
+    const prof = p.vieProfile.map((v, t) => [t, v]);
+    $('#prov-out').innerHTML = `
+      <div class="card"><h2>Provisions techniques (meilleure estimation)</h2><div class="scroll"><table>
+        <tr><td>Sinistres non-vie actualisés</td><td class="n">${fmt(p.beClaims, 1)}</td></tr>
+        <tr><td>Primes non-vie</td><td class="n">${fmt(p.pp, 1)}</td></tr>
+        <tr><td>Épargne et prévoyance vie</td><td class="n">${fmt(p.beVie, 1)}</td></tr>
+        <tr><td>Marge de risque (${pc(A.P.coc, 1)} coût du capital)</td><td class="n">${fmt(p.rm, 1)}</td></tr>
+        <tr class="tot"><td>Provisions techniques brutes</td><td class="n">${fmt(p.total, 1)}</td></tr>
+        <tr><td class="mut">Dont part des réassureurs (actif)</td><td class="n mut">${fmt(p.riRec, 1)}</td></tr></table></div>
+        <p class="note">Primes : provision pour primes non acquises × (ratio combiné − 100 %), négative si l'activité est rentable. La marge de risque se calcule sur le SCR hors marché, écoulé selon le profil de run-off.</p></div>
+      <div class="card"><h2>Flux de règlements non-vie</h2>${A.bars(cf, { d: 1 })}<p class="note">Cash-flows nominaux projetés, actualisés à mi-année sur la courbe sans risque.</p></div>
+      <div class="card" style="grid-column:1/-1"><h2>Vie : écoulement des provisions mathématiques</h2>${A.line([{ pts: prof, c: 'var(--c2)' }], { y0: 0, xf: x => x, label: 'Écoulement des provisions vie' })}
+        <p class="note">Taux servi = max(TMG ; taux forward − marge de gestion), rachats et décès en fin d'année, frais indexés. Le TMG n'est valorisé qu'en valeur intrinsèque, sans option temps.</p></div>`;
+  }
+};
+
+/* ---------- SCR ---------- */
+A.tabs.scr = {
+  label: 'SCR',
+  build() {
+    const lobN = A.P.nl.lob.map(l => l.n);
+    $('#tab-scr').innerHTML = `<div id="scr-out" class="grid"></div>
+      <div class="card"><h2>Matrices de corrélation</h2>
+        <details><summary>Agrégation des modules</summary>${A.matrix('top', ['Marché', 'Contrepartie', 'Vie', 'Non-vie'])}</details>
+        <details><summary>Marché, choc de taux à la hausse</summary>${A.matrix('mktUp', ['Taux', 'Actions', 'Immo.', 'Spread'])}</details>
+        <details><summary>Marché, choc de taux à la baisse</summary>${A.matrix('mktDn', ['Taux', 'Actions', 'Immo.', 'Spread'])}</details>
+        <details><summary>Souscription vie</summary>${A.matrix('life', ['Mortal.', 'Longév.', 'Rachats', 'Frais', 'Cat.'])}</details>
+        <details><summary>Non-vie, branches</summary>${A.matrix('lob', lobN)}</details>
+        <details><summary>Non-vie, primes et réserves / catastrophe</summary>${A.matrix('nl', ['Prim.&rés.', 'Cat.'])}</details></div>`;
+  },
+  update(r) {
+    const s = r.scr;
+    const obj = o => Object.keys(o).map(k => ({ l: k, v: o[k] }));
+    const lob = s.lob.map(l => `<tr><td>${l.n}</td><td class="n">${fmt(l.Vp, 1)}</td><td class="n">${fmt(l.Vr, 1)}</td><td class="n">${pc(l.sig, 1)}</td><td class="n">${fmt(l.scr, 1)}</td></tr>`).join('');
+    const ex = s.defParts.exposures.map(x => `<tr><td>${x.n}</td><td class="n">${fmt(x.E, 1)}</td><td class="n">${pc(x.pd, 3)}</td></tr>`).join('');
+    $('#scr-out').innerHTML = `
+      <div class="card"><h2>Marché · ${fmt(s.mkt, 1)}</h2>${A.bars(obj(s.mktParts), { d: 1 })}
+        <p class="note">Taux : perte de fonds propres après recalcul des actifs obligataires, des provisions non-vie et de la projection vie. Hausse ${fmt(s.irUp, 1)} · baisse ${fmt(s.irDn, 1)} (valeur négative : gain).</p></div>
+      <div class="card"><h2>Souscription vie · ${fmt(s.life, 1)}</h2>${A.bars(obj(s.lifeParts), { d: 1 })}
+        <p class="note">Rachats : baisse ${fmt(s.lapseDetail.lapDn, 1)} · hausse ${fmt(s.lapseDetail.lapUp, 1)} · rachat massif de 40 % ${fmt(s.lapseDetail.lapMass, 1)}. Le pire des trois est retenu.</p></div>
+      <div class="card"><h2>Souscription non-vie · ${fmt(s.nl, 1)}</h2>${A.bars(obj(s.nlParts), { d: 1 })}
+        <div class="scroll"><table style="margin-top:10px"><tr><th>Branche</th><th class="n">Vol. primes</th><th class="n">Vol. réserves</th><th class="n">σ combiné</th><th class="n">SCR</th></tr>${lob}</table></div>
+        <p class="note">SCR de branche = 3 × σ × volume, avec σ combiné primes et réserves (corrélation 0,5).</p></div>
+      <div class="card"><h2>Contrepartie · ${fmt(s.def, 1)}</h2><div class="scroll"><table><tr><th>Contrepartie</th><th class="n">Exposition</th><th class="n">PD</th></tr>${ex}</table></div>
+        <p class="note">Type 1 : ${fmt(s.defParts.t1, 2)} · Type 2 : ${fmt(s.defParts.t2, 2)} (15 % des créances de plus de 3 mois). Perte en cas de défaut : 50 %.</p></div>
+      <div class="card"><h2>Agrégation finale</h2><div class="scroll"><table>
+        <tr><td>BSCR après diversification</td><td class="n">${fmt(s.bscr, 1)}</td></tr><tr><td>Risque opérationnel</td><td class="n">${fmt(s.op, 1)}</td></tr>
+        <tr><td>Absorption par les PB futures</td><td class="n">−${fmt(s.lacFDB, 1)}</td></tr><tr><td>Absorption par les impôts différés</td><td class="n">−${fmt(s.lacDT, 1)}</td></tr>
+        <tr class="tot"><td>SCR</td><td class="n">${fmt(s.total, 1)}</td></tr></table></div>
+        <p class="note">Absorption PB : min(PB futures disponibles ; SCR marché). Impôts différés : taux d'impôt × (BSCR + opérationnel − absorption PB), plafonné.</p></div>`;
+  }
+};
+
+/* ---------- Fonds propres ---------- */
+A.tabs.fp = {
+  label: 'Fonds propres',
+  build() { $('#tab-fp').innerHTML = '<div id="fp-out" class="grid"></div>'; },
+  update(r) {
+    const o = r.of, s = r.scr.total, C = A.P.cap;
+    const t1 = o.t1u + o.t1rEl;
+    const chk = (ok, txt) => `<span class="pill ${ok ? 'ok' : 'crit'}">${txt}</span>`;
+    $('#fp-out').innerHTML = `
+      <div class="card"><h2>Des actifs aux fonds propres de base</h2><div class="scroll"><table>
+        <tr><td>Excédent d'actifs sur passifs</td><td class="n">${fmt(r.excess, 1)}</td></tr>
+        <tr><td>+ Dette subordonnée perpétuelle</td><td class="n">${fmt(C.t1r, 1)}</td></tr>
+        <tr><td>+ Dette subordonnée datée</td><td class="n">${fmt(C.t2, 1)}</td></tr>
+        <tr><td>− Dividende prévisible</td><td class="n">−${fmt(o.divd, 1)}</td></tr>
+        <tr class="tot"><td>Fonds propres de base</td><td class="n">${fmt(o.total, 1)}</td></tr></table></div></div>
+      <div class="card"><h2>Classement et éligibilité (SCR)</h2><div class="scroll"><table>
+        <tr><th>Niveau</th><th class="n">Montant</th><th class="n">Éligible</th></tr>
+        <tr><td>Niveau 1 non restreint</td><td class="n">${fmt(o.t1u, 1)}</td><td class="n">${fmt(o.t1u, 1)}</td></tr>
+        <tr><td>Niveau 1 restreint</td><td class="n">${fmt(o.t1r, 1)}</td><td class="n">${fmt(o.t1rEl, 1)}</td></tr>
+        <tr><td>Niveau 2</td><td class="n">${fmt(o.t2, 1)}</td><td class="n">${fmt(o.t2El, 1)}</td></tr>
+        <tr><td>Niveau 3 (impôts différés actifs)</td><td class="n">${fmt(o.t3, 1)}</td><td class="n">${fmt(o.t3El, 1)}</td></tr>
+        <tr class="tot"><td>Total</td><td class="n">${fmt(o.t1u + o.t1r + o.t2 + o.t3, 1)}</td><td class="n">${fmt(o.elig, 1)}</td></tr></table></div>
+        <p class="note">Éligibles : niveau 1 restreint ≤ 20 % du niveau 1, niveau 3 ≤ 15 % du SCR, niveaux 2 et 3 ≤ 50 % du SCR.</p></div>
+      <div class="card"><h2>Contrôles de couverture du SCR</h2><div class="scroll"><table>
+        <tr><td>Niveau 1 ≥ 50 % du SCR</td><td class="n">${pc(s > 0 ? t1 / s : 0, 0)}</td><td>${chk(t1 >= 0.5 * s, t1 >= 0.5 * s ? 'Respecté' : 'Dépassé')}</td></tr>
+        <tr><td>Niveau 3 ≤ 15 % du SCR</td><td class="n">${pc(s > 0 ? o.t3 / s : 0, 0)}</td><td>${chk(o.t3 <= 0.15 * s, o.t3 <= 0.15 * s ? 'Respecté' : 'Plafonné')}</td></tr>
+        <tr><td>Niveaux 2 + 3 ≤ 50 % du SCR</td><td class="n">${pc(s > 0 ? (o.t2 + o.t3) / s : 0, 0)}</td><td>${chk(o.t2 + o.t3 <= 0.5 * s, o.t2 + o.t3 <= 0.5 * s ? 'Respecté' : 'Plafonné')}</td></tr>
+        <tr class="tot"><td>Ratio SCR</td><td class="n">${pc(r.ratio, 1)}</td><td>${chk(r.ratio >= 1, r.ratio >= 1 ? 'Couvert' : 'Non couvert')}</td></tr></table></div></div>
+      <div class="card"><h2>Minimum de capital requis</h2><div class="scroll"><table>
+        <tr><td>MCR linéaire</td><td class="n">${fmt(r.mcr.lin, 1)}</td></tr>
+        <tr><td>Corridor 25 % à 45 % du SCR</td><td class="n">${fmt(0.25 * s, 1)} – ${fmt(0.45 * s, 1)}</td></tr>
+        <tr><td>Plancher absolu</td><td class="n">${fmt(C.amcr, 1)}</td></tr>
+        <tr class="tot"><td>MCR</td><td class="n">${fmt(r.mcr.total, 1)}</td></tr>
+        <tr><td>Fonds propres éligibles au MCR</td><td class="n">${fmt(o.eligMcr, 1)}</td></tr>
+        <tr class="tot"><td>Ratio MCR</td><td class="n">${pc(r.ratioMcr, 1)}</td></tr></table></div>
+        <p class="note">MCR linéaire simplifié : 8 % des provisions non-vie + 7 % des primes + 3,7 % des provisions vie + 0,07 % des capitaux sous risque. Niveau 3 exclu, niveau 2 ≤ 20 % du MCR.</p></div>`;
+  }
+};
+
+/* ---------- Chocs ---------- */
+A.SC = { shiftBp: 0, eq: 0, prop: 0, spreadBp: 0, reserveStrain: 0, lrAdd: 0, lapseMult: 1, catNet: 0 };
+const SC_FIELDS = [['shiftBp', 'Décalage de la courbe', 'pb', 10], ['eq', 'Variation des actions', '%', 1], ['prop', 'Variation de l\'immobilier', '%', 1], ['spreadBp', 'Écartement des spreads', 'pb', 10], ['reserveStrain', 'Renforcement des provisions non-vie', '%', 1], ['lrAdd', 'Dérive du ratio sinistres / primes', 'pts', 0.5], ['lapseMult', 'Multiple du taux de rachat', '×', 0.1], ['catNet', 'Sinistre catastrophe net de réassurance', 'M€', 5]];
+function scenFromUi() {
+  const c = A.SC;
+  return { shiftBp: c.shiftBp, eq: c.eq / 100, prop: c.prop / 100, spreadBp: c.spreadBp, reserveStrain: c.reserveStrain / 100, lrAdd: c.lrAdd / 100, lapseMult: c.lapseMult, catNet: c.catNet };
+}
+A.tabs.chocs = {
+  label: 'Chocs',
+  build() {
+    $('#tab-chocs').innerHTML = `
+      <div class="card"><h2>Scénarios instantanés sur le bilan de départ</h2><div id="ch-list"></div>
+        <p class="note">Chaque ligne revalorise les actifs, recalcule les provisions et le SCR, puis compare au ratio de base.</p></div>
+      <div class="card"><h2>Scénario libre</h2>
+        ${SC_FIELDS.map(f => `<label class="f"><span>${f[1]}</span><span class="in"><input type="number" inputmode="decimal" data-scen="${f[0]}" step="${f[3]}" value="${A.SC[f[0]]}"><em>${f[2]}</em></span></label>`).join('')}
+        <div id="ch-custom" style="margin-top:12px"></div></div>`;
+  },
+  update(r) {
+    const base = r.ratio * 100;
+    const rows = M.SCENARIOS.map(s => ({ n: s.n, q: M.compute(A.P, s.s) }));
+    const mx = Math.max(...rows.map(x => Math.abs(x.q.ratio * 100 - base)), 1);
+    const line = (n, q) => {
+      const d = q.ratio * 100 - base, w = Math.abs(d) / mx * 50;
+      return `<div class="scn"><span>${n}</span><span class="t"><u></u><i style="${d < 0 ? 'right' : 'left'}:50%;width:${w}%;background:var(--${d < 0 ? 'crit' : 'ok'})"></i></span><span class="num">${pc(q.ratio)}</span><span class="num" style="color:var(--ink2)">${(d >= 0 ? '+' : '−') + fmt(Math.abs(d))} pts</span></div>`;
+    };
+    $('#ch-list').innerHTML = `<div class="scn" style="font-size:11px;color:var(--ink2);font-weight:700"><span>SCÉNARIO</span><span class="t" style="background:none"></span><span class="num">RATIO</span><span class="num">ÉCART</span></div>` + rows.map(x => line(x.n, x.q)).join('');
+    const q = M.compute(A.P, scenFromUi());
+    $('#ch-custom').innerHTML = `<div class="scroll"><table>
+      <tr><th></th><th class="n">Base</th><th class="n">Choc</th></tr>
+      <tr><td>Fonds propres éligibles</td><td class="n">${fmt(r.of.elig, 1)}</td><td class="n">${fmt(q.of.elig, 1)}</td></tr>
+      <tr><td>SCR</td><td class="n">${fmt(r.scr.total, 1)}</td><td class="n">${fmt(q.scr.total, 1)}</td></tr>
+      <tr class="tot"><td>Ratio de solvabilité</td><td class="n">${pc(r.ratio)}</td><td class="n">${pc(q.ratio)}</td></tr></table></div>`;
+  }
+};
+
+/* ---------- Projection ---------- */
+A.tabs.proj = {
+  label: 'Projection 5 ans',
+  build() {
+    const F = A.fld;
+    $('#tab-proj').innerHTML = `
+      <div class="grid">
+        <div class="card"><h2>Hypothèses de trajectoire</h2>${F('Croissance des primes non-vie', 'nl.g', { s: 100, step: 0.5, u: '%' })}${F('Croissance des provisions vie', 'vie.g', { s: 100, step: 0.5, u: '%' })}${F('Ratio sinistres / primes', 'nl.lr', { s: 100, step: 0.5, u: '%' })}${F('Ratio de frais', 'nl.er', { s: 100, step: 0.5, u: '%' })}${F('Taux de distribution', 'cap.payout', { s: 100, step: 5, u: '%' })}${F('Marge de gestion vie', 'vie.fee', { s: 100, step: 0.05, u: '%' })}
+          <p class="note">Le bilan est reconstruit chaque année : provisions recalculées, actifs ajustés pour absorber le résultat, SCR recalculé en entier.</p></div>
+        <div class="card"><h2>Trajectoire du ratio</h2><div id="pj-chart"></div></div>
+      </div>
+      <div class="card"><h2>Compte de résultat simplifié et solvabilité</h2><div class="scroll" id="pj-table"></div></div>
+      <div class="card"><h2>Fonds propres éligibles et SCR</h2><div id="pj-chart2"></div></div>`;
+  },
+  update() {
+    const rows = M.project(A.P, 5);
+    const lbl = y => y === 0 ? 'N' : 'N+' + y;
+    $('#pj-chart').innerHTML = A.line([{ pts: rows.map(r => [r.y, r.ratio * 100]), c: 'var(--c2)', dots: true }], { refs: [{ y: 100, l: '100 %', c: 'var(--crit)' }, { y: 150, l: '150 %', c: 'var(--warn)' }], yf: v => fmt(v) + ' %', xf: lbl, label: 'Ratio de solvabilité projeté' });
+    $('#pj-chart2').innerHTML = A.line([{ pts: rows.map(r => [r.y, r.elig]), c: 'var(--c2)' }, { pts: rows.map(r => [r.y, r.scr]), c: 'var(--c1)' }], { y0: 0, xf: lbl, label: 'Fonds propres et SCR projetés' }) + '<p class="note"><span style="color:var(--c2)">━</span> Fonds propres éligibles &nbsp; <span style="color:var(--c1)">━</span> SCR</p>';
+    $('#pj-table').innerHTML = `<table><tr><th>Année</th><th class="n">Résultat technique NV</th><th class="n">Produits financiers</th><th class="n">Marge vie</th><th class="n">Résultat net</th><th class="n">Dividende</th><th class="n">FP éligibles</th><th class="n">SCR</th><th class="n">Ratio</th></tr>` +
+      rows.map(r => `<tr><td>${lbl(r.y)}</td>${r.y === 0 ? '<td class="n mut" colspan="5">situation de départ</td>' : `<td class="n">${fmt(r.uw, 1)}</td><td class="n">${fmt(r.fin, 1)}</td><td class="n">${fmt(r.vm, 1)}</td><td class="n">${fmt(r.net, 1)}</td><td class="n">${fmt(r.div, 1)}</td>`}<td class="n">${fmt(r.elig, 1)}</td><td class="n">${fmt(r.scr, 1)}</td><td class="n">${pc(r.ratio)}</td></tr>`).join('') + '</table>';
+  }
+};
+
+/* ---------- Pilotage ---------- */
+const ORDER = ['syn', 'hyp', 'prov', 'scr', 'fp', 'chocs', 'proj'];
+const KEY = 's2-sim-v1';
+let saveT = null;
+function save() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify({ P: A.P, tab: A.active, SC: A.SC })); } catch (e) {} }, 400);
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY); if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s && s.P && s.P.nl && s.P.vie && s.P.corr && s.P.cap && s.P.alloc) { A.P = s.P; if (s.SC) A.SC = s.SC; if (ORDER.includes(s.tab)) A.active = s.tab; }
+  } catch (e) {}
+}
+A.refresh = () => {
+  let r;
+  try { r = M.compute(A.P); } catch (e) { console.error(e); return; }
+  A.res = r;
+  A.renderLive(r);
+  const t = A.tabs[A.active]; if (t && t.update) t.update(r);
+  save();
+};
+A.buildAll = () => { ORDER.forEach(id => A.tabs[id].build()); show(A.active); };
+function show(id) {
+  A.active = id;
+  ORDER.forEach(k => { $('#tab-' + k).hidden = k !== id; });
+  document.querySelectorAll('#nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.id === id ? 'true' : 'false'));
+}
+
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.tagName !== 'INPUT') return;
+  const v = parseFloat(el.value);
+  if (isNaN(v)) return;
+  const d = el.dataset;
+  if (d.p) A.set(A.P, d.p, v / (parseFloat(d.s) || 1));
+  else if (d.tri) { const [i, k] = d.tri.split(',').map(Number); A.P.nl.tri[i][k] = v; }
+  else if (d.corr) { const [key, i, j] = d.corr.split(','); const m = A.P.corr[key]; m[+i][+j] = m[+j][+i] = Math.max(-1, Math.min(1, v)); const mirror = document.querySelector(`[data-corr="${key},${j},${i}"]`); if (mirror && mirror !== el) mirror.value = v; }
+  else if (d.scen) A.SC[d.scen] = v;
+  else return;
+  A.refresh();
+});
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.tagName === 'SELECT' && el.dataset.p) { A.set(A.P, el.dataset.p, el.value); A.refresh(); }
+});
+
+function init() {
+  load();
+  $('#nav').innerHTML = ORDER.map(id => `<button role="tab" data-id="${id}" aria-selected="false">${A.tabs[id].label}</button>`).join('');
+  $('#nav').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    show(b.dataset.id); A.refresh();
+    window.scrollTo(0, 0);
+  });
+  A.buildAll();
+  A.refresh();
+}
+init();
+})();
+</script>
